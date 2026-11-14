@@ -3,7 +3,7 @@ package com.kefir.agent
 import org.json.JSONObject
 
 class AgentEngine(
-    private val settings: AgentSettings,
+    var settings: AgentSettings,
     private val llm: LlmClient
 ) {
 

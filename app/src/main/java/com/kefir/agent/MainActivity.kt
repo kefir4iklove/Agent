@@ -1,5 +1,7 @@
 package com.kefir.agent
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -10,6 +12,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -25,13 +28,40 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settings: AgentSettings
     private val llm = LlmClient()
     private var running = false
+    private var currentChatId: String? = null
+
+    private val folderPicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+            }
+            SettingsStore.saveWorkspace(this, uri.toString())
+            settings = SettingsStore.load(this)
+            Tools.init(this, settings.workspaceTreeUri)
+            updateWorkspaceLabel()
+            Toast.makeText(this, "Воркспейс: ${Tools.workspacePath()}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val historyLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val id = result.data?.getStringExtra("chatId") ?: return@registerForActivityResult
+        loadChat(id)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Tools.init(this)
         settings = SettingsStore.load(this)
+        Tools.init(this, settings.workspaceTreeUri)
         engine = AgentEngine(settings, llm)
 
         adapter = ChatAdapter()
@@ -45,33 +75,72 @@ class MainActivity : AppCompatActivity() {
         send.setOnClickListener {
             val text = input.text.toString().trim()
             if (text.isEmpty() || running) return@setOnClickListener
-            if (settings.provider == "gemini" && settings.geminiApiKey.isBlank()) {
-                Toast.makeText(this, "Сначала укажи API ключ в настройках", Toast.LENGTH_LONG).show()
-                openSettings()
+            if (!hasKey()) {
+                Toast.makeText(this, "Сначала подключи аккаунт и вставь API ключ", Toast.LENGTH_LONG).show()
+                startActivity(Intent(this, AccountActivity::class.java))
                 return@setOnClickListener
             }
             input.setText("")
             runAgent(text)
         }
 
-        findViewById<Button>(R.id.btnSettings).setOnClickListener { openSettings() }
+        findViewById<Button>(R.id.btnHistory).setOnClickListener {
+            historyLauncher.launch(Intent(this, HistoryActivity::class.java))
+        }
+        findViewById<Button>(R.id.btnAccount).setOnClickListener {
+            startActivity(Intent(this, AccountActivity::class.java))
+        }
+        findViewById<Button>(R.id.btnKeys).setOnClickListener {
+            startActivity(Intent(this, ApiKeysActivity::class.java))
+        }
+        findViewById<Button>(R.id.btnFolder).setOnClickListener {
+            folderPicker.launch(null)
+        }
         findViewById<Button>(R.id.btnNewChat).setOnClickListener {
             if (!running) {
+                currentChatId = null
                 engine.history.clear()
                 adapter.items.clear()
                 adapter.notifyDataSetChanged()
             }
         }
-    }
 
-    private fun openSettings() {
-        startActivity(android.content.Intent(this, SettingsActivity::class.java))
+        updateWorkspaceLabel()
     }
 
     override fun onResume() {
         super.onResume()
         settings = SettingsStore.load(this)
-        engine = AgentEngine(settings, llm)
+        engine.settings = settings
+        Tools.init(this, settings.workspaceTreeUri)
+        updateWorkspaceLabel()
+    }
+
+    private fun hasKey(): Boolean = when (settings.provider) {
+        "gemini" -> settings.geminiApiKey.isNotBlank()
+        "opencode" -> settings.opencodeApiKey.isNotBlank()
+        else -> settings.openaiApiKey.isNotBlank()
+    }
+
+    private fun updateWorkspaceLabel() {
+        findViewById<TextView>(R.id.workspaceLabel).text =
+            "Воркспейс: ${Tools.workspacePath()}"
+    }
+
+    private fun loadChat(id: String) {
+        val loaded = ChatStorage.load(this, id) ?: return
+        currentChatId = id
+        engine.history.clear()
+        engine.history.addAll(loaded.first)
+        adapter.items.clear()
+        adapter.items.addAll(loaded.second)
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun saveCurrentChat() {
+        val title = adapter.items.firstOrNull { it.role == "user" }
+            ?.text?.take(60) ?: "Чат"
+        currentChatId = ChatStorage.save(this, currentChatId, title, engine.history, adapter.items)
     }
 
     private fun runAgent(text: String) {
@@ -107,6 +176,10 @@ class MainActivity : AppCompatActivity() {
                 }
             } finally {
                 runOnUiThread {
+                    try {
+                        saveCurrentChat()
+                    } catch (_: Exception) {
+                    }
                     running = false
                     findViewById<Button>(R.id.btnSend).isEnabled = true
                 }
@@ -140,7 +213,6 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
         }
         holder.messageText.text = item.text.ifBlank { "…" }
         val bg = when (item.role) {
-            "user" -> R.drawable.bg_input
             "tool" -> R.drawable.bg_tool
             else -> R.drawable.bg_input
         }

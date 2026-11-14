@@ -14,18 +14,11 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/settings"
+            android:text="@string/api_keys"
             android:textColor="@color/text_primary"
             android:textSize="22sp"
             android:textStyle="bold"
             android:paddingBottom="16dp" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/provider" />
-        <Spinner
-            android:id="@+id/spinnerProvider"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="12dp" />
 
         <TextView style="@style/FieldLabel" android:text="@string/gemini_key" />
         <EditText android:id="@+id/etGeminiKey" style="@style/FieldInput" android:hint="AIza…" />
@@ -47,7 +40,7 @@
         <EditText android:id="@+id/etOpenaiModel" style="@style/FieldInput" />
 
         <Button
-            android:id="@+id/btnSave"
+            android:id="@+id/btnSaveKeys"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"

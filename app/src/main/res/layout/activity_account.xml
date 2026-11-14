@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/chat_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/account"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:paddingBottom="16dp" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/provider" />
+        <Spinner
+            android:id="@+id/spinnerProvider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/accountHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:paddingBottom="12dp" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/api_key" />
+        <EditText
+            android:id="@+id/etAccountKey"
+            style="@style/FieldInput"
+            android:hint="API key"
+            android:inputType="textPassword" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/base_url" />
+        <EditText android:id="@+id/etAccountUrl" style="@style/FieldInput" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/model" />
+        <EditText android:id="@+id/etAccountModel" style="@style/FieldInput" />
+
+        <Button
+            android:id="@+id/btnGetKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/get_key" />
+
+        <Button
+            android:id="@+id/btnSaveAccount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/connect" />
+    </LinearLayout>
+</ScrollView>

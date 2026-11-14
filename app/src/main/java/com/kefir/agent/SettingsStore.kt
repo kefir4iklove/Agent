@@ -13,7 +13,8 @@ data class AgentSettings(
     val opencodeModel: String = "claude-sonnet-4",
     val openaiBaseUrl: String = "https://api.openai.com/v1",
     val openaiApiKey: String = "",
-    val openaiModel: String = "gpt-4o-mini"
+    val openaiModel: String = "gpt-4o-mini",
+    val workspaceTreeUri: String = ""
 )
 
 object SettingsStore {
@@ -30,7 +31,8 @@ object SettingsStore {
             opencodeModel = p.getString("opencodeModel", d.opencodeModel) ?: d.opencodeModel,
             openaiBaseUrl = p.getString("openaiBaseUrl", d.openaiBaseUrl) ?: d.openaiBaseUrl,
             openaiApiKey = p.getString("openaiApiKey", "") ?: "",
-            openaiModel = p.getString("openaiModel", d.openaiModel) ?: d.openaiModel
+            openaiModel = p.getString("openaiModel", d.openaiModel) ?: d.openaiModel,
+            workspaceTreeUri = p.getString("workspaceTreeUri", "") ?: ""
         )
     }
 
@@ -45,8 +47,12 @@ object SettingsStore {
             .putString("openaiBaseUrl", s.openaiBaseUrl)
             .putString("openaiApiKey", s.openaiApiKey)
             .putString("openaiModel", s.openaiModel)
+            .putString("workspaceTreeUri", s.workspaceTreeUri)
             .apply()
     }
+
+    fun saveWorkspace(context: Context, treeUri: String) =
+        save(context, load(context).copy(workspaceTreeUri = treeUri))
 
     private fun prefs(context: Context) = EncryptedSharedPreferences.create(
         context,
