@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agent</string>
+    <string name="settings">Настройки</string>
+    <string name="new_chat">Новый чат</string>
+    <string name="send">Отправить</string>
+    <string name="input_hint">Опиши задачу агенту…</string>
+    <string name="save">Сохранить</string>
+    <string name="provider">Провайдер</string>
+    <string name="gemini_key">Gemini API key</string>
+    <string name="gemini_model">Gemini модель</string>
+    <string name="opencode_url">OpenCode base URL</string>
+    <string name="opencode_key">OpenCode API key</string>
+    <string name="opencode_model">OpenCode модель</string>
+    <string name="openai_url">Base URL (OpenAI-совместимый)</string>
+    <string name="openai_key">API key</string>
+    <string name="openai_model">Модель</string>
+    <string name="workspace_hint">Файлы агента: Android/data/com.kefir.agent/files/workspace</string>
+</resources>

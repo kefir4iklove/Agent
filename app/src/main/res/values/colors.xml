@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_background">#1B1B1F</color>
+    <color name="chat_background">#101216</color>
+    <color name="bubble_user">#2D5BFF</color>
+    <color name="bubble_agent">#1E222A</color>
+    <color name="bubble_tool">#2A2410</color>
+    <color name="text_primary">#E8EAED</color>
+    <color name="text_secondary">#9AA0A6</color>
+</resources>

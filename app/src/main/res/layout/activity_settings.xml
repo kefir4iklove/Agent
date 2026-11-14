@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/chat_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:paddingBottom="16dp" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/provider" />
+        <Spinner
+            android:id="@+id/spinnerProvider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="12dp" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/gemini_key" />
+        <EditText android:id="@+id/etGeminiKey" style="@style/FieldInput" android:hint="AIza…" />
+        <TextView style="@style/FieldLabel" android:text="@string/gemini_model" />
+        <EditText android:id="@+id/etGeminiModel" style="@style/FieldInput" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/opencode_url" />
+        <EditText android:id="@+id/etOpencodeUrl" style="@style/FieldInput" />
+        <TextView style="@style/FieldLabel" android:text="@string/opencode_key" />
+        <EditText android:id="@+id/etOpencodeKey" style="@style/FieldInput" />
+        <TextView style="@style/FieldLabel" android:text="@string/opencode_model" />
+        <EditText android:id="@+id/etOpencodeModel" style="@style/FieldInput" />
+
+        <TextView style="@style/FieldLabel" android:text="@string/openai_url" />
+        <EditText android:id="@+id/etOpenaiUrl" style="@style/FieldInput" />
+        <TextView style="@style/FieldLabel" android:text="@string/openai_key" />
+        <EditText android:id="@+id/etOpenaiKey" style="@style/FieldInput" />
+        <TextView style="@style/FieldLabel" android:text="@string/openai_model" />
+        <EditText android:id="@+id/etOpenaiModel" style="@style/FieldInput" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/save" />
+    </LinearLayout>
+</ScrollView>
