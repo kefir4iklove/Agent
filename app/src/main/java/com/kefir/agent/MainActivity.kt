@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
 
 data class ChatItem(val role: String, var text: String)
@@ -26,7 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ChatAdapter
     private lateinit var engine: AgentEngine
     private lateinit var settings: AgentSettings
-    private val llm = LlmClient()
+    private val llm by lazy { LlmClient(this) }
     private var running = false
     private var currentChatId: String? = null
 
@@ -192,6 +193,17 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
 
     val items = mutableListOf<ChatItem>()
 
+    private var markwon: Markwon? = null
+
+    private fun markdown(ctx: android.content.Context): Markwon {
+        if (markwon == null) {
+            markwon = Markwon.builder(ctx)
+                .usePlugin(io.noties.markwon.linkify.LinkifyPlugin.create())
+                .build()
+        }
+        return markwon!!
+    }
+
     class Holder(view: View) : RecyclerView.ViewHolder(view) {
         val bubble: ViewGroup = view.findViewById(R.id.bubble)
         val roleLabel: TextView = view.findViewById(R.id.roleLabel)
@@ -211,7 +223,11 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
             "tool" -> "Инструмент"
             else -> "Agent"
         }
-        holder.messageText.text = item.text.ifBlank { "…" }
+        if (item.role == "user") {
+            holder.messageText.text = item.text.ifBlank { "…" }
+        } else {
+            markdown(holder.itemView.context).setMarkdown(holder.messageText, item.text.ifBlank { "…" })
+        }
         val bg = when (item.role) {
             "tool" -> R.drawable.bg_tool
             else -> R.drawable.bg_input

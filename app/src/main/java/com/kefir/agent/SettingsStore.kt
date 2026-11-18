@@ -8,9 +8,13 @@ data class AgentSettings(
     val provider: String = "gemini",
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-2.0-flash",
-    val opencodeBaseUrl: String = "https://opencode.ai/zen/v1",
+    val opencodeBaseUrl: String = OpenCodeOAuth.INFERENCE_URL,
     val opencodeApiKey: String = "",
-    val opencodeModel: String = "claude-sonnet-4",
+    val opencodeModel: String = "code-supernova",
+    val opencodeAccessToken: String = "",
+    val opencodeRefreshToken: String = "",
+    val opencodeExpiresAt: Long = 0,
+    val opencodeOrgId: String = "",
     val openaiBaseUrl: String = "https://api.openai.com/v1",
     val openaiApiKey: String = "",
     val openaiModel: String = "gpt-4o-mini",
@@ -29,6 +33,10 @@ object SettingsStore {
             opencodeBaseUrl = p.getString("opencodeBaseUrl", d.opencodeBaseUrl) ?: d.opencodeBaseUrl,
             opencodeApiKey = p.getString("opencodeApiKey", "") ?: "",
             opencodeModel = p.getString("opencodeModel", d.opencodeModel) ?: d.opencodeModel,
+            opencodeAccessToken = p.getString("opencodeAccessToken", "") ?: "",
+            opencodeRefreshToken = p.getString("opencodeRefreshToken", "") ?: "",
+            opencodeExpiresAt = p.getLong("opencodeExpiresAt", 0),
+            opencodeOrgId = p.getString("opencodeOrgId", "") ?: "",
             openaiBaseUrl = p.getString("openaiBaseUrl", d.openaiBaseUrl) ?: d.openaiBaseUrl,
             openaiApiKey = p.getString("openaiApiKey", "") ?: "",
             openaiModel = p.getString("openaiModel", d.openaiModel) ?: d.openaiModel,
@@ -44,11 +52,27 @@ object SettingsStore {
             .putString("opencodeBaseUrl", s.opencodeBaseUrl)
             .putString("opencodeApiKey", s.opencodeApiKey)
             .putString("opencodeModel", s.opencodeModel)
+            .putString("opencodeAccessToken", s.opencodeAccessToken)
+            .putString("opencodeRefreshToken", s.opencodeRefreshToken)
+            .putLong("opencodeExpiresAt", s.opencodeExpiresAt)
+            .putString("opencodeOrgId", s.opencodeOrgId)
             .putString("openaiBaseUrl", s.openaiBaseUrl)
             .putString("openaiApiKey", s.openaiApiKey)
             .putString("openaiModel", s.openaiModel)
             .putString("workspaceTreeUri", s.workspaceTreeUri)
             .apply()
+    }
+
+    fun saveOpencodeTokens(context: Context, cred: OpenCodeOAuth.Credential) {
+        val s = load(context)
+        save(
+            context,
+            s.copy(
+                opencodeAccessToken = cred.access,
+                opencodeRefreshToken = cred.refresh,
+                opencodeExpiresAt = cred.expiresAt
+            )
+        )
     }
 
     fun saveWorkspace(context: Context, treeUri: String) =

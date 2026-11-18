@@ -24,4 +24,7 @@
     <string name="openai_key">API key</string>
     <string name="openai_model">Модель</string>
     <string name="history_empty">Пока нет сохранённых чатов</string>
+    <string name="open_login">Открыть страницу входа</string>
+    <string name="google_login">Войти через Google (OpenCode)</string>
+    <string name="model_fallback">Модель (если список не загрузился)</string>
 </resources>

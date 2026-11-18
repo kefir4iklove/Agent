@@ -17,6 +17,38 @@ object Tools {
         localWorkspace = File(context.getExternalFilesDir(null) ?: context.filesDir, "workspace")
         if (!localWorkspace.exists()) localWorkspace.mkdirs()
         this.treeUri = treeUriStr?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+        ensureBusyboxLinks()
+    }
+
+    private fun binDir(): File = File(appContext!!.filesDir, "bin")
+
+    private fun busyboxPath(): String? =
+        appContext?.applicationInfo?.nativeLibraryDir
+            ?.let { File(it, "libbusybox.so") }
+            ?.takeIf { it.exists() }
+            ?.absolutePath
+
+    /** Прокидываем busybox-апплеты через симлинки — агент получает полноценный unix-набор. */
+    private fun ensureBusyboxLinks() {
+        val bb = busyboxPath() ?: return
+        try {
+            val bin = binDir()
+            bin.mkdirs()
+            val applets = listOf(
+                "ls", "cat", "grep", "egrep", "fgrep", "sed", "awk", "find", "tar", "gzip",
+                "gunzip", "wget", "vi", "head", "tail", "wc", "tr", "sort", "uniq", "mkdir",
+                "rmdir", "cp", "mv", "rm", "touch", "chmod", "du", "df", "basename", "dirname",
+                "env", "md5sum", "sha1sum", "sha256sum", "xargs", "printf", "diff", "cut",
+                "test", "expr", "cmp", "readlink", "realpath", "od", "xxd", "base64"
+            )
+            val walked = bin.listFiles()?.size ?: -1
+            if (walked == applets.size) return
+            for (a in applets) {
+                val link = File(bin, a)
+                ProcessBuilder("sh", "-c", "ln -sf '$bb' '${link.absolutePath}'").start().waitFor()
+            }
+        } catch (_: Exception) {
+        }
     }
 
     fun isSafMode(): Boolean = treeUri != null
@@ -31,7 +63,7 @@ object Tools {
         - read_file({"path": "file.txt"}) -> содержимое файла
         - write_file({"path": "file.txt", "content": "..."}) -> создать/перезаписать файл
         - delete_file({"path": "file.txt"}) -> удалить файл
-        - run_shell({"command": "ls -la"}) -> выполнить shell-команду (только во встроенном воркспейсе)
+        - run_shell({"command": "ls -la"}) -> выполнить shell-команду (только во встроенном воркспейсе). Доступен полный busybox-набор: wget, sed, awk, tar, gzip, vi, find, grep, sort, diff, patch, md5sum и др.
     """.trimIndent()
 
     fun execute(name: String, args: JSONObject): String = when (name) {
@@ -142,6 +174,10 @@ object Tools {
         return try {
             val proc = ProcessBuilder("sh", "-c", command)
                 .directory(localWorkspace)
+                .apply {
+                    environment()["PATH"] =
+                        binDir().absolutePath + ":/system/bin:/system/xbin:/vendor/bin"
+                }
                 .start()
             val out = proc.inputStream.bufferedReader().readText()
             val err = proc.errorStream.bufferedReader().readText()

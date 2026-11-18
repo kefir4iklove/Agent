@@ -35,18 +35,73 @@
             android:textSize="12sp"
             android:paddingBottom="12dp" />
 
-        <TextView style="@style/FieldLabel" android:text="@string/api_key" />
-        <EditText
-            android:id="@+id/etAccountKey"
-            style="@style/FieldInput"
-            android:hint="API key"
-            android:inputType="textPassword" />
+        <LinearLayout
+            android:id="@+id/secKeyBased"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-        <TextView style="@style/FieldLabel" android:text="@string/base_url" />
-        <EditText android:id="@+id/etAccountUrl" style="@style/FieldInput" />
+            <TextView style="@style/FieldLabel" android:text="@string/api_key" />
+            <EditText
+                android:id="@+id/etAccountKey"
+                style="@style/FieldInput"
+                android:hint="API key"
+                android:inputType="textPassword" />
 
-        <TextView style="@style/FieldLabel" android:text="@string/model" />
-        <EditText android:id="@+id/etAccountModel" style="@style/FieldInput" />
+            <TextView style="@style/FieldLabel" android:text="@string/base_url" />
+            <EditText android:id="@+id/etAccountUrl" style="@style/FieldInput" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/model" />
+            <EditText android:id="@+id/etAccountModel" style="@style/FieldInput" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/secOpencode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView style="@style/FieldLabel" android:text="Workspace" />
+            <Spinner
+                android:id="@+id/spinnerOrg"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:visibility="gone" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/model" />
+            <Spinner
+                android:id="@+id/spinnerModel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvLoginStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnOpenLogin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/open_login"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btnGoogleLogin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/google_login" />
 
         <Button
             android:id="@+id/btnGetKey"

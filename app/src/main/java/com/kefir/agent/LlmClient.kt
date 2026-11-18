@@ -1,5 +1,6 @@
 package com.kefir.agent
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -13,7 +14,11 @@ import java.util.concurrent.TimeUnit
 
 data class ChatMessage(val role: String, val content: String)
 
-class LlmClient {
+class HttpUnauthorized(message: String) : IOException(message)
+
+class LlmClient(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -76,39 +81,82 @@ class LlmClient {
         }
     }
 
-    private fun streamOpenAiCompatible(
-        settings: AgentSettings,
+    private suspend fun streamOpenAiCompatible(
+        base: AgentSettings,
         messages: List<ChatMessage>,
         onDelta: (String) -> Unit
     ): String {
-        val (baseUrl, apiKey, model) = if (settings.provider == "opencode") {
-            Triple(settings.opencodeBaseUrl, settings.opencodeApiKey, settings.opencodeModel)
-        } else {
-            Triple(settings.openaiBaseUrl, settings.openaiApiKey, settings.openaiModel)
-        }
-
+        var settings = base
         val msgs = JSONArray()
         messages.forEach { m ->
             msgs.put(JSONObject().put("role", m.role).put("content", m.content))
         }
-        val body = JSONObject().put("model", model).put("messages", msgs).put("stream", true)
+        val bodyBase = JSONObject().put("messages", msgs).put("stream", true)
 
-        val url = baseUrl.trimEnd('/') + "/chat/completions"
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $apiKey")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+        var model = ""
+        var attempt = 0
+        while (true) {
+            if (settings.provider == "opencode") {
+                model = settings.opencodeModel
+            } else {
+                model = settings.openaiModel
+            }
+            val body = JSONObject(bodyBase.toString()).put("model", model)
+            val (url, token, extraHeaders) = endpointFor(settings)
 
-        return readSse(request) { data ->
-            if (data == "[DONE]") return@readSse ""
-            val json = JSONObject(data)
-            val delta = json.getJSONArray("choices").getJSONObject(0)
-                .optJSONObject("delta")?.optString("content", "") ?: ""
-            if (delta.isNotEmpty()) {
-                onDelta(delta)
-                delta
-            } else ""
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $token")
+                .apply {
+                    for ((k, v) in extraHeaders) header(k, v)
+                }
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+
+            try {
+                return readSse(request) { data ->
+                    if (data == "[DONE]") return@readSse ""
+                    val json = JSONObject(data)
+                    val delta = json.getJSONArray("choices").getJSONObject(0)
+                        .optJSONObject("delta")?.optString("content", "") ?: ""
+                    if (delta.isNotEmpty()) {
+                        onDelta(delta)
+                        delta
+                    } else ""
+                }
+            } catch (e: HttpUnauthorized) {
+                // OpenCode OAuth: токен истёк — обновляем и пробуем ещё раз
+                if (settings.provider != "opencode" ||
+                    settings.opencodeRefreshToken.isBlank() || attempt > 0
+                ) throw e
+                val cred = OpenCodeOAuth.refresh(settings.opencodeRefreshToken)
+                SettingsStore.saveOpencodeTokens(appContext, cred)
+                settings = settings.copy(
+                    opencodeAccessToken = cred.access,
+                    opencodeRefreshToken = cred.refresh,
+                    opencodeExpiresAt = cred.expiresAt
+                )
+                attempt++
+            }
+        }
+    }
+
+    private fun endpointFor(settings: AgentSettings): Triple<String, String, Map<String, String>> {
+        return if (settings.provider == "opencode") {
+            val token = if (settings.opencodeAccessToken.isNotBlank()) {
+                settings.opencodeAccessToken
+            } else settings.opencodeApiKey
+            val headers = buildMap {
+                put("User-Agent", OpenCodeOAuth.UA)
+                if (settings.opencodeOrgId.isNotBlank()) put("x-opencode-org-id", settings.opencodeOrgId)
+            }
+            Triple(settings.opencodeBaseUrl.trimEnd('/') + "/chat/completions", token, headers)
+        } else {
+            Triple(
+                settings.openaiBaseUrl.trimEnd('/') + "/chat/completions",
+                settings.openaiApiKey,
+                emptyMap()
+            )
         }
     }
 
@@ -116,6 +164,7 @@ class LlmClient {
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 val err = response.body?.string()?.take(500) ?: ""
+                if (response.code == 401) throw HttpUnauthorized("HTTP 401: $err")
                 throw IOException("HTTP ${response.code}: $err")
             }
             val source = response.body?.source() ?: throw IOException("Пустой ответ")
