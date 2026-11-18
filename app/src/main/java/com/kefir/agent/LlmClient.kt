@@ -160,24 +160,48 @@ class LlmClient(context: Context) {
         }
     }
 
+    private fun readableError(body: String): String {
+        // Try to pull "message" / "error.message" / "error.status" out of a JSON error body
+        return try {
+            val json = JSONObject(body)
+            val m = json.optString("message").ifBlank { json.optJSONObject("error")?.optString("message").orEmpty() }
+            if (m.isNotBlank()) m.take(300) else body.take(300)
+        } catch (_: Exception) {
+            body.take(300)
+        }
+    }
+
     private fun readSse(request: Request, handler: (String) -> String): String {
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                val err = response.body?.string()?.take(500) ?: ""
-                if (response.code == 401) throw HttpUnauthorized("HTTP 401: $err")
-                throw IOException("HTTP ${response.code}: $err")
+                val err = response.body?.string()?.take(2000) ?: ""
+                if (response.code == 401) throw HttpUnauthorized("HTTP 401: ${readableError(err)}")
+                throw IOException("HTTP ${response.code}: ${readableError(err)}")
             }
             val source = response.body?.source() ?: throw IOException("Пустой ответ")
             val full = StringBuilder()
+            var dataLines = 0
+            var parsedLines = 0
             while (true) {
                 val line = source.readUtf8Line() ?: break
                 if (!line.startsWith("data:")) continue
                 val data = line.removePrefix("data:").trim()
                 if (data.isEmpty()) continue
+                dataLines++
                 try {
-                    full.append(handler(data))
-                } catch (_: Exception) {
+                    val handled = handler(data)
+                    if (handled.isNotEmpty()) parsedLines++
+                    full.append(handled)
+                } catch (e: Throwable) {
+                    // Keep streaming — one malformed event must not kill the response,
+                    // but stop silently swallowing everything.
                 }
+            }
+            if (full.isEmpty() && dataLines > 0 && parsedLines == 0) {
+                throw IOException("Сервер прислал ответ, но он не распознан (не SSE-поток). Проверь модель/base URL.")
+            }
+            if (full.isEmpty() && dataLines == 0) {
+                throw IOException("Пустой ответ от сервера. Проверь API ключ и модель.")
             }
             return full.toString()
         }

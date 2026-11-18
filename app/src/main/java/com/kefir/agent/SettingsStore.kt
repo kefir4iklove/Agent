@@ -18,8 +18,18 @@ data class AgentSettings(
     val openaiBaseUrl: String = "https://api.openai.com/v1",
     val openaiApiKey: String = "",
     val openaiModel: String = "gpt-4o-mini",
-    val workspaceTreeUri: String = ""
-)
+    val workspaceTreeUri: String = "",
+    // Cached model lists (fetched from servers) for the top model picker
+    val cacheGeminiModels: List<String> = emptyList(),
+    val cacheOpenaiModels: List<String> = emptyList(),
+    val cacheOpencodeModels: List<String> = emptyList()
+) {
+    fun modelsFor(provider: String): List<String> = when (provider) {
+        "gemini" -> cacheGeminiModels
+        "opencode" -> cacheOpencodeModels
+        else -> cacheOpenaiModels
+    }
+}
 
 object SettingsStore {
 
@@ -40,7 +50,10 @@ object SettingsStore {
             openaiBaseUrl = p.getString("openaiBaseUrl", d.openaiBaseUrl) ?: d.openaiBaseUrl,
             openaiApiKey = p.getString("openaiApiKey", "") ?: "",
             openaiModel = p.getString("openaiModel", d.openaiModel) ?: d.openaiModel,
-            workspaceTreeUri = p.getString("workspaceTreeUri", "") ?: ""
+            workspaceTreeUri = p.getString("workspaceTreeUri", "") ?: "",
+            cacheGeminiModels = (p.getString("cacheGeminiModels", "") ?: "").split("\n").filter { it.isNotBlank() },
+            cacheOpenaiModels = (p.getString("cacheOpenaiModels", "") ?: "").split("\n").filter { it.isNotBlank() },
+            cacheOpencodeModels = (p.getString("cacheOpencodeModels", "") ?: "").split("\n").filter { it.isNotBlank() }
         )
     }
 
@@ -60,6 +73,9 @@ object SettingsStore {
             .putString("openaiApiKey", s.openaiApiKey)
             .putString("openaiModel", s.openaiModel)
             .putString("workspaceTreeUri", s.workspaceTreeUri)
+            .putString("cacheGeminiModels", s.cacheGeminiModels.joinToString("\n"))
+            .putString("cacheOpenaiModels", s.cacheOpenaiModels.joinToString("\n"))
+            .putString("cacheOpencodeModels", s.cacheOpencodeModels.joinToString("\n"))
             .apply()
     }
 

@@ -37,7 +37,7 @@ class ApiKeysActivity : AppCompatActivity() {
                 s.copy(
                     geminiApiKey = etGeminiKey.text.toString().trim(),
                     geminiModel = etGeminiModel.text.toString().trim().ifBlank { "gemini-2.0-flash" },
-                    opencodeBaseUrl = etOpencodeUrl.text.toString().trim().ifBlank { "https://opencode.ai/zen/v1" },
+                    opencodeBaseUrl = etOpencodeUrl.text.toString().trim().ifBlank { OpenCodeOAuth.INFERENCE_URL },
                     opencodeApiKey = etOpencodeKey.text.toString().trim(),
                     opencodeModel = etOpencodeModel.text.toString().trim().ifBlank { "claude-sonnet-4" },
                     openaiBaseUrl = etOpenaiUrl.text.toString().trim().ifBlank { "https://api.openai.com/v1" },

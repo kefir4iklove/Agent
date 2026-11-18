@@ -15,8 +15,8 @@ android {
         applicationId = "com.kefir.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
     }
 
     if (keystorePropsFile.exists()) {
@@ -60,6 +60,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.documentfile:documentfile:1.0.1")

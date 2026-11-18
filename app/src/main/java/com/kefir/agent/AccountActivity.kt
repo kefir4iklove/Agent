@@ -1,5 +1,6 @@
 package com.kefir.agent
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -44,6 +45,7 @@ class AccountActivity : AppCompatActivity() {
     private lateinit var tvLoginStatus: TextView
     private lateinit var btnOpenLogin: Button
     private lateinit var btnGoogleLogin: Button
+    private lateinit var btnWebViewLogin: Button
 
     private var loginJob: Job? = null
     private var modelsJob: Job? = null
@@ -68,6 +70,7 @@ class AccountActivity : AppCompatActivity() {
         tvLoginStatus = findViewById(R.id.tvLoginStatus)
         btnOpenLogin = findViewById(R.id.btnOpenLogin)
         btnGoogleLogin = findViewById(R.id.btnGoogleLogin)
+        btnWebViewLogin = findViewById(R.id.btnWebViewLogin)
         val hint = findViewById<TextView>(R.id.accountHint)
 
         spinnerProvider.adapter = ArrayAdapter(
@@ -97,12 +100,14 @@ class AccountActivity : AppCompatActivity() {
             if (id == "opencode") {
                 secKeyBased.visibility = View.GONE
                 secOpencode.visibility = View.VISIBLE
+                btnWebViewLogin.visibility = View.VISIBLE
                 hint.text = "Вход через аккаунт OpenCode (Google sign-in). API-ключ вводить не нужно — браузер откроется автоматически."
                 val connected = cur.opencodeAccessToken.isNotBlank()
                 tvLoginStatus.text = if (connected) "✅ Аккаунт подключён (модель: ${cur.opencodeModel})" else "Не выполнен вход"
             } else {
                 secKeyBased.visibility = View.VISIBLE
                 secOpencode.visibility = View.GONE
+                btnWebViewLogin.visibility = View.GONE
                 if (id == "gemini") {
                     keyLoadedProgrammatically = true
                     etKey.setText(cur.geminiApiKey)
@@ -133,6 +138,11 @@ class AccountActivity : AppCompatActivity() {
             verificationUrl?.let { url -> openBrowser(url) }
         }
 
+        findViewById<Button>(R.id.btnWebViewLogin).setOnClickListener {
+            val startUrl = verificationUrl ?: "https://opencode.ai/console"
+            openInApp(startUrl)
+        }
+
         findViewById<Button>(R.id.btnGetKey).setOnClickListener {
             val url = when (currentProviderId()) {
                 "gemini" -> "https://aistudio.google.com/apikey"
@@ -148,19 +158,22 @@ class AccountActivity : AppCompatActivity() {
     private fun currentProviderId(): String =
         providers[spinnerProvider.selectedItemPosition.coerceAtLeast(0)].id
 
-    /** Opens the system browser. Falls back to a chooser if needed. */
+    /** Opens the system browser; if none installed ("нет поддерживаемых приложений")
+     *  falls back to an in-app WebView. */
     private fun openBrowser(url: String) {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            return
+        } catch (_: ActivityNotFoundException) {
         } catch (_: Exception) {
-            try {
-                val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(Intent.createChooser(i, "Открыть в браузере"))
-            } catch (_: Exception) {
-                Toast.makeText(this, "Браузер не найден. Открой вручную: $url", Toast.LENGTH_LONG).show()
-            }
         }
+        Toast.makeText(this, "Браузер не найден — открываю вход внутри приложения", Toast.LENGTH_LONG).show()
+        openInApp(url)
+    }
+
+    private fun openInApp(url: String) {
+        val i = Intent(this, LoginWebViewActivity::class.java).putExtra("url", url)
+        startActivity(i)
     }
 
     private fun applyModels(list: List<String>) {
@@ -192,6 +205,13 @@ class AccountActivity : AppCompatActivity() {
             val res = ModelCatalog.fetch(id, key, base)
             if (!isActive) return@launch
             if (res.models.isNotEmpty()) {
+                // cache for the top model picker
+                val st = SettingsStore.load(this@AccountActivity)
+                SettingsStore.save(
+                    this@AccountActivity,
+                    if (id == "gemini") st.copy(cacheGeminiModels = res.models)
+                    else st.copy(cacheOpenaiModels = res.models)
+                )
                 applyModels(res.models)
                 if (!etModel.text.toString().trim().isBlank() && res.models.none { it == etModel.text.toString().trim() }) {
                     // keep user's manual value, dropdown just offers alternatives
@@ -228,7 +248,11 @@ class AccountActivity : AppCompatActivity() {
                         start.verificationUrl + (if (start.verificationUrl.contains("?")) "&" else "?") +
                             "code=" + URLEncoder.encode(start.userCode, "UTF-8")
                     }
-                openBrowser(target)
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                } catch (_: Exception) {
+                    openInApp(target)
+                }
 
                 var interval = start.intervalSec * 1000L
                 val deadline = System.currentTimeMillis() + start.expiresSec * 1000L
@@ -276,6 +300,7 @@ class AccountActivity : AppCompatActivity() {
             val activeOrg = orgs[spinnerOrg.selectedItemPosition.coerceAtLeast(0)].id
             models = OpenCodeOAuth.models(cred.access, activeOrg)
             if (models.isNotEmpty()) {
+                SettingsStore.save(this, SettingsStore.load(this).copy(cacheOpencodeModels = models))
                 spinnerModel.visibility = View.VISIBLE
                 spinnerModel.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, models)
                 val savedModel = SettingsStore.load(this).opencodeModel

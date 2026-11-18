@@ -31,4 +31,11 @@
     <string name="models_loaded">Список моделей загружен</string>
     <string name="models_need_key">Вставь API key — список моделей загрузится автоматически</string>
     <string name="models_error">Не удалось загрузить модели: %1$s</string>
+    <string name="chats">Чаты</string>
+    <string name="no_chats">Пока нет чатов</string>
+    <string name="select_model">Выбор модели</string>
+    <string name="pick_folder">Выбрать папку</string>
+    <string name="loading_models">Загружаю модели…</string>
+    <string name="webview_login">Войти здесь</string>
+    <string name="model_none">Не выбрана</string>
 </resources>

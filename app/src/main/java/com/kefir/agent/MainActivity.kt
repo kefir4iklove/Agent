@@ -1,25 +1,30 @@
 package com.kefir.agent
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.PopupMenu
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class ChatItem(val role: String, var text: String)
@@ -29,9 +34,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ChatAdapter
     private lateinit var engine: AgentEngine
     private lateinit var settings: AgentSettings
+    private lateinit var drawer: DrawerLayout
+    private lateinit var drawerAdapter: DrawerChats
     private val llm by lazy { LlmClient(this) }
     private var running = false
     private var currentChatId: String? = null
+    private var modelFetchJob: Job? = null
 
     private val folderPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -46,17 +54,11 @@ class MainActivity : AppCompatActivity() {
             }
             SettingsStore.saveWorkspace(this, uri.toString())
             settings = SettingsStore.load(this)
+            engine.settings = settings
             Tools.init(this, settings.workspaceTreeUri)
-            updateWorkspaceLabel()
+            updateWorkspaceLabels()
             Toast.makeText(this, "Воркспейс: ${Tools.workspacePath()}", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private val historyLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val id = result.data?.getStringExtra("chatId") ?: return@registerForActivityResult
-        loadChat(id)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,22 +66,61 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         settings = SettingsStore.load(this)
+        // Фолбэк: если модель пустая — ставим дефолт для провайдера
+        val fixed = fixEmptyModel(settings)
+        if (fixed != settings) {
+            SettingsStore.save(this, fixed)
+            settings = fixed
+        }
         Tools.init(this, settings.workspaceTreeUri)
         engine = AgentEngine(settings, llm)
+
+        drawer = findViewById(R.id.drawerLayout)
 
         adapter = ChatAdapter()
         val list = findViewById<RecyclerView>(R.id.chatList)
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
 
+        // ----- Drawer: chats on top, settings at the bottom -----
+        drawerAdapter = DrawerChats()
+        val drawerList = findViewById<RecyclerView>(R.id.drawerChatList)
+        drawerList.layoutManager = LinearLayoutManager(this)
+        drawerList.adapter = drawerAdapter
+
+        findViewById<View>(R.id.btnDrawer).setOnClickListener {
+            refreshDrawer()
+            drawer.openDrawer(Gravity.START)
+        }
+        findViewById<View>(R.id.btnDrawerNewChat).setOnClickListener {
+            newChat()
+            drawer.closeDrawer(Gravity.START)
+        }
+        findViewById<View>(R.id.btnDrawerAccount).setOnClickListener {
+            startActivity(Intent(this, AccountActivity::class.java))
+            drawer.closeDrawer(Gravity.START)
+        }
+        findViewById<View>(R.id.btnDrawerKeys).setOnClickListener {
+            startActivity(Intent(this, ApiKeysActivity::class.java))
+            drawer.closeDrawer(Gravity.START)
+        }
+        findViewById<View>(R.id.btnDrawerFolder).setOnClickListener {
+            folderPicker.launch(null)
+            drawer.closeDrawer(Gravity.START)
+        }
+
+        findViewById<ImageButton>(R.id.btnFolder).setOnClickListener { folderPicker.launch(null) }
+
+        // ----- Top model selector -----
+        findViewById<TextView>(R.id.btnModelSelector).setOnClickListener { showModelPicker() }
+
         val input = findViewById<EditText>(R.id.inputField)
         val send = findViewById<ImageButton>(R.id.btnSend)
-
         send.setOnClickListener {
             val text = input.text.toString().trim()
             if (text.isEmpty() || running) return@setOnClickListener
             if (!hasKey()) {
-                Toast.makeText(this, "Сначала подключи аккаунт и вставь API ключ", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Сначала подключи аккаунт или вставь API ключ", Toast.LENGTH_LONG).show()
                 startActivity(Intent(this, AccountActivity::class.java))
                 return@setOnClickListener
             }
@@ -87,41 +128,265 @@ class MainActivity : AppCompatActivity() {
             runAgent(text)
         }
 
-        findViewById<ImageButton>(R.id.btnHistory).setOnClickListener {
-            historyLauncher.launch(Intent(this, HistoryActivity::class.java))
-        }
-
-        findViewById<ImageButton>(R.id.btnFolder).setOnClickListener {
-            folderPicker.launch(null)
-        }
-
-        findViewById<ImageButton>(R.id.btnMenu).setOnClickListener { anchor ->
-            showMenu(anchor)
-        }
-
-        updateWorkspaceLabel()
-        updateChatTitle()
+        updateWorkspaceLabels()
+        updateModelPill()
     }
 
-    private fun showMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, 1, 0, "Новый чат")
-        popup.menu.add(0, 2, 1, "История")
-        popup.menu.add(0, 3, 2, "Аккаунт")
-        popup.menu.add(0, 4, 3, "API ключи")
-        popup.menu.add(0, 5, 4, "Выбрать папку")
-        popup.setOnMenuItemClickListener { item: MenuItem ->
-            when (item.itemId) {
-                1 -> newChat()
-                2 -> historyLauncher.launch(Intent(this, HistoryActivity::class.java))
-                3 -> startActivity(Intent(this, AccountActivity::class.java))
-                4 -> startActivity(Intent(this, ApiKeysActivity::class.java))
-                5 -> folderPicker.launch(null)
+    // ------------------------------------------------------------------
+    // Model picker at the top, grouped by provider/API
+    // ------------------------------------------------------------------
+
+    private fun fixEmptyModel(s: AgentSettings): AgentSettings = when (s.provider) {
+        "gemini" -> if (s.geminiModel.isBlank()) s.copy(geminiModel = "gemini-2.0-flash") else s
+        "opencode" -> if (s.opencodeModel.isBlank()) s.copy(opencodeModel = "code-supernova") else s
+        else -> if (s.openaiModel.isBlank()) s.copy(openaiModel = "gpt-4o-mini") else s
+    }
+
+    private fun providerLabel(id: String): String = when (id) {
+        "gemini" -> "Gemini"
+        "opencode" -> "OpenCode"
+        else -> "Custom API"
+    }
+
+    private fun updateModelPill() {
+        val model = when (settings.provider) {
+            "gemini" -> settings.geminiModel
+            "opencode" -> settings.opencodeModel
+            else -> settings.openaiModel
+        }
+        findViewById<TextView>(R.id.btnModelSelector).text =
+            "${providerLabel(settings.provider)} \u00b7 $model"
+    }
+
+    private class PickerRow(
+        val kind: Int, // 0 = header, 1 = model, 2 = settings link
+        val provider: String = "",
+        val name: String = "",
+        val selected: Boolean = false
+    )
+
+    private fun showModelPicker() {
+        settings = SettingsStore.load(this)
+        val rows = mutableListOf<PickerRow>()
+        fun section(id: String, current: String, available: List<String>, configured: Boolean) {
+            rows.add(PickerRow(0, id, providerLabel(id)))
+            if (!configured) {
+                rows.add(PickerRow(1, id, "— не подключён, настрой в Аккаунте", false))
+                return
             }
-            true
+            if (available.isEmpty()) {
+                rows.add(PickerRow(3))
+            }
+            val all = (listOf(current) + available.filter { it != current })
+            all.forEach { rows.add(PickerRow(1, id, it, it == current)) }
         }
-        popup.show()
+        section("gemini", settings.geminiModel, settings.cacheGeminiModels, settings.geminiApiKey.isNotBlank())
+        section("opencode", settings.opencodeModel, settings.cacheOpencodeModels,
+            settings.opencodeAccessToken.isNotBlank() || settings.opencodeApiKey.isNotBlank())
+        section("openai", settings.openaiModel, settings.cacheOpenaiModels, settings.openaiApiKey.isNotBlank())
+        rows.add(PickerRow(2, name = "⚙ Настроить аккаунты и ключи"))
+
+        lateinit var lv: ListView
+        val listAdapter = object : ArrayAdapter<PickerRow>(this, 0, rows) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val ctx = parent.context
+                val row = rows[position]
+                val tv = (convertView as? TextView) ?: TextView(ctx)
+                tv.setSingleLine(false)
+                tv.maxLines = 2
+                when (row.kind) {
+                    0 -> {
+                        tv.text = row.name
+                        tv.setTextColor(0xFF9AA0A6.toInt())
+                        tv.textSize = 12f
+                        tv.setAllCaps(true)
+                        tv.setPadding(dp(18), dp(14), dp(12), dp(4))
+                    }
+                    1 -> {
+                        tv.text = row.name
+                        tv.setTextColor(if (row.selected) 0xFF7DA2FF.toInt() else 0xFFE8EAED.toInt())
+                        tv.textSize = 15f
+                        tv.setPadding(dp(18), dp(11), dp(12), dp(11))
+                    }
+                    2 -> {
+                        tv.text = row.name
+                        tv.setTextColor(0xFF8AB4F8.toInt())
+                        tv.textSize = 14f
+                        tv.setPadding(dp(18), dp(14), dp(12), dp(10))
+                    }
+                    else -> {
+                        tv.text = getString(R.string.loading_models)
+                        tv.setTextColor(0xFF9AA0A6.toInt())
+                        tv.textSize = 12f
+                        tv.setPadding(dp(18), dp(6), dp(12), dp(6))
+                    }
+                }
+                tv.setBackgroundColor(Color.TRANSPARENT)
+                return tv
+            }
+        }
+        lv = ListView(this)
+        lv.adapter = listAdapter
+        lv.setBackgroundColor(0xFF17191E.toInt())
+        lv.divider = null
+
+        val dialog = AlertDialog.Builder(this, R.style.Theme_Agent)
+            .setTitle(getString(R.string.select_model))
+            .setView(lv)
+            .create()
+
+        lv.setOnItemClickListener { _, _, pos, _ ->
+            val row = rows.getOrNull(pos) ?: return@setOnItemClickListener
+            if (row.kind == 1 && row.name.startsWith("— не подключён")) {
+                dialog.dismiss()
+                startActivity(Intent(this, AccountActivity::class.java))
+                return@setOnItemClickListener
+            }
+            if (row.kind == 2) {
+                dialog.dismiss()
+                startActivity(Intent(this, AccountActivity::class.java))
+                return@setOnItemClickListener
+            }
+            if (row.kind == 1) {
+                val s = SettingsStore.load(this)
+                val updated = when (row.provider) {
+                    "gemini" -> s.copy(provider = "gemini", geminiModel = row.name)
+                    "opencode" -> s.copy(provider = "opencode", opencodeModel = row.name)
+                    else -> s.copy(provider = "openai", openaiModel = row.name)
+                }
+                SettingsStore.save(this, updated)
+                settings = updated
+                engine.settings = updated
+                updateModelPill()
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
+        refreshingMissingCaches {
+            rows.clear()
+            rows.addAll(buildPickerRows())
+            listAdapter.notifyDataSetChanged()
+        }
     }
+
+    private fun buildPickerRows(): MutableList<PickerRow> {
+        val rows = mutableListOf<PickerRow>()
+        fun section(id: String, current: String, available: List<String>, configured: Boolean) {
+            rows.add(PickerRow(0, id, providerLabel(id)))
+            if (!configured) {
+                rows.add(PickerRow(1, id, "— не подключён, настрой в Аккаунте", false))
+                return
+            }
+            if (available.isEmpty()) rows.add(PickerRow(3))
+            val all = (listOf(current) + available.filter { it != current })
+            all.forEach { rows.add(PickerRow(1, id, it, it == current)) }
+        }
+        section("gemini", settings.geminiModel, settings.cacheGeminiModels, settings.geminiApiKey.isNotBlank())
+        section("opencode", settings.opencodeModel, settings.cacheOpencodeModels,
+            settings.opencodeAccessToken.isNotBlank() || settings.opencodeApiKey.isNotBlank())
+        section("openai", settings.openaiModel, settings.cacheOpenaiModels, settings.openaiApiKey.isNotBlank())
+        rows.add(PickerRow(2, name = "⚙ Настроить аккаунты и ключи"))
+        return rows
+    }
+
+    /** Fetches model lists that are missing from the cache and caches them. */
+    private fun refreshingMissingCaches(onDone: () -> Unit) {
+        if (modelFetchJob?.isActive == true) return
+        fun needed(): Boolean {
+            val s = SettingsStore.load(this)
+            if (s.geminiApiKey.isNotBlank() && s.cacheGeminiModels.isEmpty()) return true
+            if (s.openaiApiKey.isNotBlank() && s.cacheOpenaiModels.isEmpty()) return true
+            if ((s.opencodeAccessToken.isNotBlank() && s.opencodeOrgId.isNotBlank()) &&
+                s.cacheOpencodeModels.isEmpty()
+            ) return true
+            return false
+        }
+        if (!needed()) return
+        modelFetchJob = lifecycleScope.launch {
+            var s = SettingsStore.load(this@MainActivity)
+            try {
+                if (s.geminiApiKey.isNotBlank() && s.cacheGeminiModels.isEmpty()) {
+                    ModelCatalog.fetch("gemini", s.geminiApiKey, "").models.takeIf { it.isNotEmpty() }?.let {
+                        SettingsStore.save(this@MainActivity, s.copy(cacheGeminiModels = it))
+                        s = SettingsStore.load(this@MainActivity)
+                    }
+                }
+                if (s.openaiApiKey.isNotBlank() && s.cacheOpenaiModels.isEmpty()) {
+                    ModelCatalog.fetch("openai", s.openaiApiKey, s.openaiBaseUrl).models.takeIf { it.isNotEmpty() }?.let {
+                        SettingsStore.save(this@MainActivity, s.copy(cacheOpenaiModels = it))
+                        s = SettingsStore.load(this@MainActivity)
+                    }
+                }
+                if (s.opencodeAccessToken.isNotBlank() && s.opencodeOrgId.isNotBlank() &&
+                    s.cacheOpencodeModels.isEmpty()
+                ) {
+                    OpenCodeOAuth.models(s.opencodeAccessToken, s.opencodeOrgId).takeIf { it.isNotEmpty() }?.let {
+                        SettingsStore.save(this@MainActivity, s.copy(cacheOpencodeModels = it))
+                        s = SettingsStore.load(this@MainActivity)
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            runOnUiThread { onDone() }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Drawer
+    // ------------------------------------------------------------------
+
+    private fun refreshDrawer() {
+        drawerAdapter.refresh()
+        findViewById<TextView>(R.id.drawerEmptyLabel).visibility =
+            if (drawerAdapter.items.isEmpty()) View.VISIBLE else View.GONE
+        findViewById<RecyclerView>(R.id.drawerChatList).visibility =
+            if (drawerAdapter.items.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    inner class DrawerChats : RecyclerView.Adapter<DrawerChats.Holder>() {
+        val items = mutableListOf<ChatStorage.SavedChat>()
+        private val fmt = java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault())
+
+        fun refresh() {
+            items.clear()
+            items.addAll(ChatStorage.list(this@MainActivity))
+            notifyDataSetChanged()
+        }
+
+        inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
+            val title: TextView = view.findViewById(R.id.chatTitle)
+            val date: TextView = view.findViewById(R.id.chatDate)
+            val delete: Button = view.findViewById(R.id.btnDeleteChat)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder =
+            Holder(LayoutInflater.from(parent.context).inflate(R.layout.item_chat, parent, false))
+
+        override fun onBindViewHolder(holder: Holder, position: Int) {
+            val chat = items[position]
+            holder.title.text = chat.title
+            holder.date.text = fmt.format(java.util.Date(chat.updated))
+            holder.itemView.setOnClickListener {
+                loadChat(chat.id)
+                drawer.closeDrawer(Gravity.START)
+            }
+            holder.delete.setOnClickListener { v ->
+                ChatStorage.delete(v.context, chat.id)
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    items.removeAt(pos)
+                    notifyItemRemoved(pos)
+                    if (currentChatId == chat.id) newChat()
+                    refreshDrawer()
+                }
+            }
+        }
+
+        override fun getItemCount(): Int = items.size
+    }
+
+    // ------------------------------------------------------------------
 
     private fun newChat() {
         if (running) return
@@ -129,7 +394,7 @@ class MainActivity : AppCompatActivity() {
         engine.history.clear()
         adapter.items.clear()
         adapter.notifyDataSetChanged()
-        updateChatTitle()
+        refreshDrawer()
     }
 
     override fun onResume() {
@@ -137,7 +402,9 @@ class MainActivity : AppCompatActivity() {
         settings = SettingsStore.load(this)
         engine.settings = settings
         Tools.init(this, settings.workspaceTreeUri)
-        updateWorkspaceLabel()
+        updateWorkspaceLabels()
+        updateModelPill()
+        refreshDrawer()
     }
 
     private fun hasKey(): Boolean = when (settings.provider) {
@@ -146,21 +413,13 @@ class MainActivity : AppCompatActivity() {
         else -> settings.openaiApiKey.isNotBlank()
     }
 
-    private fun updateWorkspaceLabel() {
-        findViewById<TextView>(R.id.workspaceLabel).text =
-            "Папка: ${Tools.workspacePath()}"
+    private fun updateWorkspaceLabels() {
+        val txt = "Папка: ${Tools.workspacePath()}"
+        findViewById<TextView>(R.id.workspaceLabel).text = txt
+        findViewById<TextView>(R.id.drawerWorkspace).text = txt
     }
 
-    private fun updateChatTitle(title: String? = null) {
-        val t = when {
-            title != null -> title
-            else -> {
-                adapter.items.firstOrNull { it.role == "user" }?.text?.take(60)
-                    ?: "Новый чат"
-            }
-        }
-        findViewById<TextView>(R.id.chatTitleLabel).text = t
-    }
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun loadChat(id: String) {
         val loaded = ChatStorage.load(this, id) ?: return
@@ -170,9 +429,6 @@ class MainActivity : AppCompatActivity() {
         adapter.items.clear()
         adapter.items.addAll(loaded.second)
         adapter.notifyDataSetChanged()
-        updateChatTitle(
-            ChatStorage.list(this).firstOrNull { it.id == id }?.title
-        )
         scrollToBottom()
     }
 
@@ -185,7 +441,7 @@ class MainActivity : AppCompatActivity() {
         val title = adapter.items.firstOrNull { it.role == "user" }
             ?.text?.take(60) ?: "Чат"
         currentChatId = ChatStorage.save(this, currentChatId, title, engine.history, adapter.items)
-        updateChatTitle(title)
+        refreshDrawer()
     }
 
     private fun runAgent(text: String) {
@@ -196,7 +452,6 @@ class MainActivity : AppCompatActivity() {
         val agentItem = ChatItem("agent", "")
         adapter.items.add(agentItem)
         adapter.notifyItemRangeInserted(adapter.items.size - 2, 2)
-        updateChatTitle(text.take(60))
         scrollToBottom()
 
         lifecycleScope.launch {
@@ -206,22 +461,42 @@ class MainActivity : AppCompatActivity() {
                     onDelta = { delta ->
                         runOnUiThread {
                             agentItem.text += delta
-                            adapter.notifyItemChanged(adapter.items.size - 1)
+                            val idx = adapter.items.indexOf(agentItem)
+                            if (idx >= 0) adapter.notifyItemChanged(idx)
                             scrollToBottom()
                         }
                     },
                     onToolResult = { line ->
                         runOnUiThread {
-                            adapter.items.add(adapter.items.size - 1, ChatItem("tool", line))
-                            adapter.notifyItemRangeInserted(adapter.items.size - 2, 1)
+                            val idx = adapter.items.indexOf(agentItem)
+                            if (idx >= 0) {
+                                adapter.items.add(idx, ChatItem("tool", line))
+                                adapter.notifyItemRangeInserted(idx, 1)
+                            } else {
+                                adapter.items.add(ChatItem("tool", line))
+                                adapter.notifyItemInserted(adapter.items.size - 1)
+                            }
                             scrollToBottom()
                         }
                     }
                 )
             } catch (e: Exception) {
+                val msg = (e.message ?: e.toString()).take(400)
                 runOnUiThread {
-                    agentItem.text = agentItem.text.ifBlank { "" } + "\n⚠️ " + (e.message ?: e.toString())
-                    adapter.notifyItemChanged(adapter.items.size - 1)
+                    if (agentItem.text.isNotBlank()) {
+                        adapter.items.add(ChatItem("error", msg))
+                        adapter.notifyItemInserted(adapter.items.size - 1)
+                    } else {
+                        val idx = adapter.items.indexOf(agentItem)
+                        if (idx >= 0) {
+                            adapter.items.removeAt(idx)
+                            adapter.notifyItemRemoved(idx)
+                        }
+                        adapter.items.add(ChatItem("error", msg))
+                        adapter.notifyItemInserted(adapter.items.size - 1)
+                    }
+                    scrollToBottom()
+                    Toast.makeText(this@MainActivity, "Ошибка: $msg", Toast.LENGTH_LONG).show()
                 }
             } finally {
                 runOnUiThread {
@@ -287,10 +562,25 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
                 params.width = FrameLayout.LayoutParams.WRAP_CONTENT
                 holder.bubble.setPadding(dp(holder, 12), dp(holder, 8), dp(holder, 12), dp(holder, 8))
             }
+            "error" -> {
+                holder.roleLabel.visibility = View.VISIBLE
+                holder.roleLabel.text = "⚠ Ошибка"
+                holder.roleLabel.setTextColor(0xFFFF8A80.toInt())
+                holder.messageText.visibility = View.VISIBLE
+                holder.messageText.text = item.text
+                holder.messageText.textSize = 14f
+                holder.messageText.setTextColor(0xFFFFB4A9.toInt())
+                holder.bubble.setBackgroundResource(R.drawable.bg_chip)
+                params.gravity = Gravity.START
+                params.width = FrameLayout.LayoutParams.MATCH_PARENT
+                holder.bubble.setPadding(dp(holder, 12), dp(holder, 8), dp(holder, 12), dp(holder, 8))
+            }
             else -> {
                 holder.roleLabel.visibility = View.VISIBLE
                 holder.roleLabel.text = "✦ Agent"
+                holder.roleLabel.setTextColor(0xFFE8EAED.toInt())
                 holder.messageText.visibility = View.VISIBLE
+                holder.messageText.setTextColor(0xFFE8EAED.toInt())
                 markdown(holder.itemView.context).setMarkdown(
                     holder.messageText,
                     item.text.ifBlank { "…" }

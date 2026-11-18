@@ -1,114 +1,243 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/chat_background">
+    android:fitsSystemWindows="false">
 
+    <!-- ================= MAIN CONTENT ================= -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="16dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@color/chat_background">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingLeft="8dp"
+            android:paddingRight="16dp">
+
+            <ImageButton
+                android:id="@+id/btnDrawer"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/chats"
+                android:src="@drawable/ic_drawer"
+                android:tint="@color/text_primary" />
+
+            <!-- Top model selector pill (like ChatGPT top picker) -->
+            <TextView
+                android:id="@+id/btnModelSelector"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/bg_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:drawableEnd="@drawable/ic_dots"
+                android:drawablePadding="6dp"
+                android:ellipsize="middle"
+                android:gravity="center"
+                android:maxLines="1"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="9dp"
+                android:text="@string/model_none"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnFolder"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/folder"
+                android:src="@android:drawable/ic_menu_save"
+                android:tint="@color/text_primary" />
+        </LinearLayout>
 
         <TextView
-            android:layout_width="0dp"
+            android:id="@+id/workspaceLabel"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:maxLines="2"
+            android:ellipsize="middle" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chatList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
+            android:clipToPadding="false"
+            android:padding="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="bottom"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="10dp">
+
+            <EditText
+                android:id="@+id/inputField"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:hint="@string/input_hint"
+                android:maxLines="6"
+                android:inputType="textMultiLine|textCapSentences"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_secondary"
+                android:textSize="15sp" />
+
+            <ImageButton
+                android:id="@+id/btnSend"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_send"
+                android:contentDescription="@string/send"
+                android:src="@drawable/ic_send"
+                android:padding="12dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ================= LEFT DRAWER ================= -->
+    <LinearLayout
+        android:id="@+id/drawerPane"
+        android:layout_width="300dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:orientation="vertical"
+        android:background="#17191E"
+        android:paddingTop="18dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="18dp"
             android:text="@string/app_name"
             android:textColor="@color/text_primary"
-            android:textSize="21sp"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
-        <ImageButton
-            android:id="@+id/btnFolder"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/folder"
-            android:src="@android:drawable/ic_menu_save"
-            android:tint="@color/text_primary" />
-
-        <ImageButton
-            android:id="@+id/btnHistory"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/history"
-            android:src="@drawable/ic_history" />
-
-        <ImageButton
-            android:id="@+id/btnMenu"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/menu"
-            android:src="@drawable/ic_dots" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/workspaceLabel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="11sp"
-        android:maxLines="2"
-        android:ellipsize="middle" />
-
-    <TextView
-        android:id="@+id/chatTitleLabel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="4dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chatList"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:padding="12dp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="bottom"
-        android:paddingLeft="12dp"
-        android:paddingRight="12dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="10dp">
-
-        <EditText
-            android:id="@+id/inputField"
-            android:layout_width="0dp"
+        <TextView
+            android:id="@+id/btnDrawerNewChat"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_marginHorizontal="10dp"
+            android:layout_marginTop="10dp"
             android:background="@drawable/bg_input"
-            android:hint="@string/input_hint"
-            android:maxLines="6"
-            android:inputType="textMultiLine|textCapSentences"
-            android:paddingHorizontal="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="14dp"
             android:paddingVertical="12dp"
+            android:text="+ Новый чат"
+            android:textColor="@color/bubble_user"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="18dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="6dp"
+            android:text="@string/chats"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textAllCaps="true" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/drawerChatList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingHorizontal="10dp" />
+
+        <TextView
+            android:id="@+id/drawerEmptyLabel"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:text="@string/no_chats"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#262B33" />
+
+        <!-- ===== Settings at the bottom of the drawer ===== -->
+        <TextView
+            android:id="@+id/drawerWorkspace"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="18dp"
+            android:paddingTop="8dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:maxLines="2"
+            android:ellipsize="middle" />
+
+        <TextView
+            android:id="@+id/btnDrawerAccount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="13dp"
+            android:text="@string/account"
             android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary"
             android:textSize="15sp" />
 
-        <ImageButton
-            android:id="@+id/btnSend"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_send"
-            android:contentDescription="@string/send"
-            android:src="@drawable/ic_send"
-            android:padding="12dp" />
+        <TextView
+            android:id="@+id/btnDrawerKeys"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="13dp"
+            android:text="@string/api_keys"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/btnDrawerFolder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="13dp"
+            android:paddingBottom="18dp"
+            android:text="@string/pick_folder"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
     </LinearLayout>
-</LinearLayout>
+</androidx.drawerlayout.widget.DrawerLayout>

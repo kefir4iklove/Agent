@@ -129,6 +129,14 @@
             android:text="@string/google_login" />
 
         <Button
+            android:id="@+id/btnWebViewLogin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/webview_login"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnGetKey"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
