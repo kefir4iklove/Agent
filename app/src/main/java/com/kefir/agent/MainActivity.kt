@@ -5,15 +5,17 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -71,7 +73,7 @@ class MainActivity : AppCompatActivity() {
         list.adapter = adapter
 
         val input = findViewById<EditText>(R.id.inputField)
-        val send = findViewById<Button>(R.id.btnSend)
+        val send = findViewById<ImageButton>(R.id.btnSend)
 
         send.setOnClickListener {
             val text = input.text.toString().trim()
@@ -85,28 +87,49 @@ class MainActivity : AppCompatActivity() {
             runAgent(text)
         }
 
-        findViewById<Button>(R.id.btnHistory).setOnClickListener {
+        findViewById<ImageButton>(R.id.btnHistory).setOnClickListener {
             historyLauncher.launch(Intent(this, HistoryActivity::class.java))
         }
-        findViewById<Button>(R.id.btnAccount).setOnClickListener {
-            startActivity(Intent(this, AccountActivity::class.java))
-        }
-        findViewById<Button>(R.id.btnKeys).setOnClickListener {
-            startActivity(Intent(this, ApiKeysActivity::class.java))
-        }
-        findViewById<Button>(R.id.btnFolder).setOnClickListener {
+
+        findViewById<ImageButton>(R.id.btnFolder).setOnClickListener {
             folderPicker.launch(null)
         }
-        findViewById<Button>(R.id.btnNewChat).setOnClickListener {
-            if (!running) {
-                currentChatId = null
-                engine.history.clear()
-                adapter.items.clear()
-                adapter.notifyDataSetChanged()
-            }
+
+        findViewById<ImageButton>(R.id.btnMenu).setOnClickListener { anchor ->
+            showMenu(anchor)
         }
 
         updateWorkspaceLabel()
+        updateChatTitle()
+    }
+
+    private fun showMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Новый чат")
+        popup.menu.add(0, 2, 1, "История")
+        popup.menu.add(0, 3, 2, "Аккаунт")
+        popup.menu.add(0, 4, 3, "API ключи")
+        popup.menu.add(0, 5, 4, "Выбрать папку")
+        popup.setOnMenuItemClickListener { item: MenuItem ->
+            when (item.itemId) {
+                1 -> newChat()
+                2 -> historyLauncher.launch(Intent(this, HistoryActivity::class.java))
+                3 -> startActivity(Intent(this, AccountActivity::class.java))
+                4 -> startActivity(Intent(this, ApiKeysActivity::class.java))
+                5 -> folderPicker.launch(null)
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun newChat() {
+        if (running) return
+        currentChatId = null
+        engine.history.clear()
+        adapter.items.clear()
+        adapter.notifyDataSetChanged()
+        updateChatTitle()
     }
 
     override fun onResume() {
@@ -119,13 +142,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun hasKey(): Boolean = when (settings.provider) {
         "gemini" -> settings.geminiApiKey.isNotBlank()
-        "opencode" -> settings.opencodeApiKey.isNotBlank()
+        "opencode" -> settings.opencodeAccessToken.isNotBlank() || settings.opencodeApiKey.isNotBlank()
         else -> settings.openaiApiKey.isNotBlank()
     }
 
     private fun updateWorkspaceLabel() {
         findViewById<TextView>(R.id.workspaceLabel).text =
-            "Воркспейс: ${Tools.workspacePath()}"
+            "Папка: ${Tools.workspacePath()}"
+    }
+
+    private fun updateChatTitle(title: String? = null) {
+        val t = when {
+            title != null -> title
+            else -> {
+                adapter.items.firstOrNull { it.role == "user" }?.text?.take(60)
+                    ?: "Новый чат"
+            }
+        }
+        findViewById<TextView>(R.id.chatTitleLabel).text = t
     }
 
     private fun loadChat(id: String) {
@@ -136,22 +170,34 @@ class MainActivity : AppCompatActivity() {
         adapter.items.clear()
         adapter.items.addAll(loaded.second)
         adapter.notifyDataSetChanged()
+        updateChatTitle(
+            ChatStorage.list(this).firstOrNull { it.id == id }?.title
+        )
+        scrollToBottom()
+    }
+
+    private fun scrollToBottom() {
+        val list = findViewById<RecyclerView>(R.id.chatList)
+        list.scrollToPosition((adapter.itemCount - 1).coerceAtLeast(0))
     }
 
     private fun saveCurrentChat() {
         val title = adapter.items.firstOrNull { it.role == "user" }
             ?.text?.take(60) ?: "Чат"
         currentChatId = ChatStorage.save(this, currentChatId, title, engine.history, adapter.items)
+        updateChatTitle(title)
     }
 
     private fun runAgent(text: String) {
         running = true
-        findViewById<Button>(R.id.btnSend).isEnabled = false
+        findViewById<ImageButton>(R.id.btnSend).isEnabled = false
 
         adapter.items.add(ChatItem("user", text))
         val agentItem = ChatItem("agent", "")
         adapter.items.add(agentItem)
         adapter.notifyItemRangeInserted(adapter.items.size - 2, 2)
+        updateChatTitle(text.take(60))
+        scrollToBottom()
 
         lifecycleScope.launch {
             try {
@@ -161,12 +207,14 @@ class MainActivity : AppCompatActivity() {
                         runOnUiThread {
                             agentItem.text += delta
                             adapter.notifyItemChanged(adapter.items.size - 1)
+                            scrollToBottom()
                         }
                     },
                     onToolResult = { line ->
                         runOnUiThread {
                             adapter.items.add(adapter.items.size - 1, ChatItem("tool", line))
                             adapter.notifyItemRangeInserted(adapter.items.size - 2, 1)
+                            scrollToBottom()
                         }
                     }
                 )
@@ -182,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Exception) {
                     }
                     running = false
-                    findViewById<Button>(R.id.btnSend).isEnabled = true
+                    findViewById<ImageButton>(R.id.btnSend).isEnabled = true
                 }
             }
         }
@@ -218,25 +266,47 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = items[position]
-        holder.roleLabel.text = when (item.role) {
-            "user" -> "Ты"
-            "tool" -> "Инструмент"
-            else -> "Agent"
-        }
-        if (item.role == "user") {
-            holder.messageText.text = item.text.ifBlank { "…" }
-        } else {
-            markdown(holder.itemView.context).setMarkdown(holder.messageText, item.text.ifBlank { "…" })
-        }
-        val bg = when (item.role) {
-            "tool" -> R.drawable.bg_tool
-            else -> R.drawable.bg_input
-        }
-        holder.bubble.setBackgroundResource(bg)
         val params = holder.bubble.layoutParams as FrameLayout.LayoutParams
-        params.gravity = if (item.role == "user") Gravity.END else Gravity.START
+
+        when (item.role) {
+            "user" -> {
+                holder.roleLabel.visibility = View.GONE
+                holder.messageText.text = item.text.ifBlank { "…" }
+                holder.messageText.textSize = 15f
+                holder.bubble.setBackgroundResource(R.drawable.bg_bubble_user)
+                params.gravity = Gravity.END
+                params.width = FrameLayout.LayoutParams.WRAP_CONTENT
+                holder.bubble.setPadding(dp(holder, 14), dp(holder, 10), dp(holder, 14), dp(holder, 10))
+            }
+            "tool" -> {
+                holder.roleLabel.visibility = View.VISIBLE
+                holder.roleLabel.text = item.text.ifBlank { "…инструмент" }
+                holder.messageText.visibility = View.GONE
+                holder.bubble.setBackgroundResource(R.drawable.bg_chip)
+                params.gravity = Gravity.CENTER_HORIZONTAL
+                params.width = FrameLayout.LayoutParams.WRAP_CONTENT
+                holder.bubble.setPadding(dp(holder, 12), dp(holder, 8), dp(holder, 12), dp(holder, 8))
+            }
+            else -> {
+                holder.roleLabel.visibility = View.VISIBLE
+                holder.roleLabel.text = "✦ Agent"
+                holder.messageText.visibility = View.VISIBLE
+                markdown(holder.itemView.context).setMarkdown(
+                    holder.messageText,
+                    item.text.ifBlank { "…" }
+                )
+                holder.messageText.textSize = 15f
+                holder.bubble.background = null
+                params.gravity = Gravity.START
+                params.width = FrameLayout.LayoutParams.MATCH_PARENT
+                holder.bubble.setPadding(dp(holder, 4), dp(holder, 2), dp(holder, 4), dp(holder, 6))
+            }
+        }
         holder.bubble.layoutParams = params
     }
+
+    private fun dp(holder: Holder, v: Int): Int =
+        (v * holder.itemView.context.resources.displayMetrics.density).toInt()
 
     override fun getItemCount(): Int = items.size
 }

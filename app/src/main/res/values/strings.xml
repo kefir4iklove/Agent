@@ -27,4 +27,8 @@
     <string name="open_login">Открыть страницу входа</string>
     <string name="google_login">Войти через Google (OpenCode)</string>
     <string name="model_fallback">Модель (если список не загрузился)</string>
+    <string name="menu">Меню</string>
+    <string name="models_loaded">Список моделей загружен</string>
+    <string name="models_need_key">Вставь API key — список моделей загрузится автоматически</string>
+    <string name="models_error">Не удалось загрузить модели: %1$s</string>
 </resources>

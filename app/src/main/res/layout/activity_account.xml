@@ -52,7 +52,32 @@
             <EditText android:id="@+id/etAccountUrl" style="@style/FieldInput" />
 
             <TextView style="@style/FieldLabel" android:text="@string/model" />
-            <EditText android:id="@+id/etAccountModel" style="@style/FieldInput" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <AutoCompleteTextView
+                    android:id="@+id/etAccountModel"
+                    style="@style/FieldInput"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:completionThreshold="1"
+                    android:hint="@string/model_fallback"
+                    android:inputType="text" />
+
+                <ImageButton
+                    android:id="@+id/btnRefreshModels"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_send"
+                    android:contentDescription="@string/model"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_refresh" />
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout

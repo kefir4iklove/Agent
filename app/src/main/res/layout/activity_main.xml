@@ -7,11 +7,10 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="60dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="8dp">
+        android:paddingHorizontal="16dp">
 
         <TextView
             android:layout_width="0dp"
@@ -19,77 +18,55 @@
             android:layout_weight="1"
             android:text="@string/app_name"
             android:textColor="@color/text_primary"
-            android:textSize="20sp"
+            android:textSize="21sp"
             android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/btnHistory"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="@string/history"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnNewChat"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:minWidth="0dp"
-            android:text="@string/new_chat"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="6dp">
-
-        <Button
-            android:id="@+id/btnAccount"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
-            android:text="@string/account"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnKeys"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:minWidth="0dp"
-            android:text="@string/api_keys"
-            android:textSize="12sp" />
-
-        <Button
+        <ImageButton
             android:id="@+id/btnFolder"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:minWidth="0dp"
-            android:text="@string/folder"
-            android:textSize="12sp" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/folder"
+            android:src="@android:drawable/ic_menu_save"
+            android:tint="@color/text_primary" />
+
+        <ImageButton
+            android:id="@+id/btnHistory"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/history"
+            android:src="@drawable/ic_history" />
+
+        <ImageButton
+            android:id="@+id/btnMenu"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu"
+            android:src="@drawable/ic_dots" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/workspaceLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="2dp"
+        android:paddingHorizontal="16dp"
         android:textColor="@color/text_secondary"
         android:textSize="11sp"
         android:maxLines="2"
         android:ellipsize="middle" />
+
+    <TextView
+        android:id="@+id/chatTitleLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="4dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/chatList"
@@ -104,7 +81,10 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="bottom"
-        android:padding="8dp">
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="10dp">
 
         <EditText
             android:id="@+id/inputField"
@@ -115,15 +95,20 @@
             android:hint="@string/input_hint"
             android:maxLines="6"
             android:inputType="textMultiLine|textCapSentences"
-            android:padding="12dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
             android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary" />
+            android:textColorHint="@color/text_secondary"
+            android:textSize="15sp" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnSend"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
-            android:text="@string/send" />
+            android:background="@drawable/bg_send"
+            android:contentDescription="@string/send"
+            android:src="@drawable/ic_send"
+            android:padding="12dp" />
     </LinearLayout>
 </LinearLayout>
