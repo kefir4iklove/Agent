@@ -38,4 +38,7 @@
     <string name="loading_models">Загружаю модели…</string>
     <string name="webview_login">Войти здесь</string>
     <string name="model_none">Не выбрана</string>
+    <string name="export_data">Экспорт данных</string>
+    <string name="import_data">Импорт данных</string>
+    <string name="stop">Остановить</string>
 </resources>

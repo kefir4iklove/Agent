@@ -263,10 +263,11 @@ class AccountActivity : AppCompatActivity() {
                         is OpenCodeOAuth.PollResult.SlowDown -> interval += 5000
                         is OpenCodeOAuth.PollResult.Success -> {
                             SettingsStore.saveOpencodeTokens(applicationContext, poll.cred)
-                            tvLoginStatus.text = "✅ Вход выполнен! Загружаю воркспейсы и модели…"
+                            tvLoginStatus.text = "✅ Вход выполнен! Подключаю воркспейс и модель…"
                             loadWorkspacesAndModels(poll.cred)
-                            tvLoginStatus.text = "✅ Аккаунт OpenCode подключён!\nВыбери модель и нажми «Подключить»."
-                            btnGoogleLogin.isEnabled = true
+                            // AUTO-SAVE: полностью подключаем OpenCode как провайдера,
+                            // чтобы не было "а дальше че делать"
+                            autoFinishOpenCodeConnect()
                             break
                         }
                         is OpenCodeOAuth.PollResult.Failed -> {
@@ -281,6 +282,25 @@ class AccountActivity : AppCompatActivity() {
                 btnGoogleLogin.isEnabled = true
             }
         }
+    }
+
+    /** Автоподключение OpenCode после успешного входа: сохраняем всё и возвращаемся в чат. */
+    private fun autoFinishOpenCodeConnect() {
+        val st = SettingsStore.load(this)
+        var s = st.copy(
+            provider = "opencode",
+            opencodeBaseUrl = OpenCodeOAuth.INFERENCE_URL,
+            opencodeModel = st.opencodeModel.ifBlank { models.firstOrNull() ?: "code-supernova" },
+            opencodeOrgId = if (st.opencodeOrgId.isBlank() && orgs.isNotEmpty()) orgs[0].id else st.opencodeOrgId
+        )
+        SettingsStore.save(this, s)
+        btnGoogleLogin.isEnabled = true
+        tvLoginStatus.text = "✅ Аккаунт OpenCode подключён! Модель: ${s.opencodeModel}."
+        Toast.makeText(this, "✅ OpenCode подключён! Выбери модель сверху в чате и пиши задачу", Toast.LENGTH_LONG).show()
+        // небольшая пауза, чтобы пользователь увидел статус
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            finish()
+        }, 1200)
     }
 
     private suspend fun loadWorkspacesAndModels(cred: OpenCodeOAuth.Credential) {

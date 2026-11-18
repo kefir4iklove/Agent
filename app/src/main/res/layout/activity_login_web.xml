@@ -54,5 +54,28 @@
     <WebView
         android:id="@+id/loginWeb"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Вошёл через Google? Нажми ✓ — приложение само завершит подключение"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:paddingBottom="6dp" />
+
+        <Button
+            android:id="@+id/btnLoginDone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="✓ Готово — вернуться" />
+    </LinearLayout>
 </LinearLayout>

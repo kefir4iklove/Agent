@@ -43,6 +43,8 @@ class LoginWebViewActivity : AppCompatActivity() {
         progress.visibility = View.VISIBLE
         if (savedInstanceState == null) web.loadUrl(url)
 
+        findViewById<android.widget.Button>(R.id.btnLoginDone).setOnClickListener { finish() }
+
         btnCopy.setOnClickListener {
             val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
             cm.setPrimaryClip(android.content.ClipData.newPlainText("url", url))

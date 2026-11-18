@@ -227,6 +227,32 @@
             android:textSize="15sp" />
 
         <TextView
+            android:id="@+id/btnDrawerExport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="13dp"
+            android:text="@string/export_data"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/btnDrawerImport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="13dp"
+            android:text="@string/import_data"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp" />
+
+        <TextView
             android:id="@+id/btnDrawerFolder"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

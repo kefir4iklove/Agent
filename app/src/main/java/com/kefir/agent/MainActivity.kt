@@ -40,6 +40,43 @@ class MainActivity : AppCompatActivity() {
     private var running = false
     private var currentChatId: String? = null
     private var modelFetchJob: Job? = null
+    private var agentJob: kotlinx.coroutines.Job? = null
+    private lateinit var btnSend: ImageButton
+
+    // SAF: экспорт/импорт данных (zip с ключами и чатами)
+    private val exportPicker = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val res = DataTransfer.export(this, uri)
+            res.onSuccess { n ->
+                Toast.makeText(this, "Сохранено: настройки + $n чат(ов)", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(this, "Ошибка: ${it.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    private val importPicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val res = DataTransfer.import(this, uri)
+            res.onSuccess { n ->
+                settings = SettingsStore.load(this)
+                engine = AgentEngine(settings, llm)
+                currentChatId = null
+                adapter.items.clear()
+                adapter.notifyDataSetChanged()
+                Tools.init(this, settings.workspaceTreeUri)
+                updateWorkspaceLabels()
+                updateModelPill()
+                refreshDrawer()
+                Toast.makeText(this, "Импортировано: $n чат(ов) + настройки", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(this, "Ошибка: ${it.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     private val folderPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -104,6 +141,16 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ApiKeysActivity::class.java))
             drawer.closeDrawer(Gravity.START)
         }
+        findViewById<View>(R.id.btnDrawerExport).setOnClickListener {
+            drawer.closeDrawer(Gravity.START)
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            exportPicker.launch("agent-backup-$stamp.zip")
+        }
+        findViewById<View>(R.id.btnDrawerImport).setOnClickListener {
+            drawer.closeDrawer(Gravity.START)
+            importPicker.launch(arrayOf("application/zip", "application/octet-stream"))
+        }
         findViewById<View>(R.id.btnDrawerFolder).setOnClickListener {
             folderPicker.launch(null)
             drawer.closeDrawer(Gravity.START)
@@ -115,10 +162,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.btnModelSelector).setOnClickListener { showModelPicker() }
 
         val input = findViewById<EditText>(R.id.inputField)
-        val send = findViewById<ImageButton>(R.id.btnSend)
-        send.setOnClickListener {
+        btnSend = findViewById(R.id.btnSend)
+        btnSend.setOnClickListener {
+            if (running) {
+                // Стоп: отменяем запрос/агент
+                agentJob?.cancel()
+                return@setOnClickListener
+            }
             val text = input.text.toString().trim()
-            if (text.isEmpty() || running) return@setOnClickListener
+            if (text.isEmpty()) return@setOnClickListener
             if (!hasKey()) {
                 Toast.makeText(this, "Сначала подключи аккаунт или вставь API ключ", Toast.LENGTH_LONG).show()
                 startActivity(Intent(this, AccountActivity::class.java))
@@ -165,67 +217,77 @@ class MainActivity : AppCompatActivity() {
         val selected: Boolean = false
     )
 
-    private fun showModelPicker() {
-        settings = SettingsStore.load(this)
+
+    private fun modelDefaults(id: String): List<String> = if (id == "gemini") listOf(
+        "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"
+    ) else emptyList()
+
+    private fun buildPickerRows(): MutableList<PickerRow> {
         val rows = mutableListOf<PickerRow>()
-        fun section(id: String, current: String, available: List<String>, configured: Boolean) {
+        fun section(id: String, current: String, cache: List<String>, configured: Boolean) {
+            val list = if (configured) (cache.ifEmpty { modelDefaults(id) }) else cache
             rows.add(PickerRow(0, id, providerLabel(id)))
             if (!configured) {
-                rows.add(PickerRow(1, id, "— не подключён, настрой в Аккаунте", false))
+                rows.add(PickerRow(1, id, "\u2014 не подключён, настрой в Аккаунте", false))
                 return
             }
-            if (available.isEmpty()) {
-                rows.add(PickerRow(3))
-            }
-            val all = (listOf(current) + available.filter { it != current })
-            all.forEach { rows.add(PickerRow(1, id, it, it == current)) }
+            if (list.isEmpty()) rows.add(PickerRow(3))
+            (listOf(current) + list.filter { it != current }).distinct()
+                .forEach { rows.add(PickerRow(1, id, it, it == current)) }
         }
         section("gemini", settings.geminiModel, settings.cacheGeminiModels, settings.geminiApiKey.isNotBlank())
         section("opencode", settings.opencodeModel, settings.cacheOpencodeModels,
             settings.opencodeAccessToken.isNotBlank() || settings.opencodeApiKey.isNotBlank())
         section("openai", settings.openaiModel, settings.cacheOpenaiModels, settings.openaiApiKey.isNotBlank())
-        rows.add(PickerRow(2, name = "⚙ Настроить аккаунты и ключи"))
+        rows.add(PickerRow(2, name = "\u2699 Настроить аккаунты и ключи"))
+        return rows
+    }
 
-        lateinit var lv: ListView
+    private fun showModelPicker() {
+        settings = SettingsStore.load(this)
+        val rows = buildPickerRows()
+
         val listAdapter = object : ArrayAdapter<PickerRow>(this, 0, rows) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val ctx = parent.context
-                val row = rows[position]
+                val row = rows.getOrNull(position) ?: return TextView(ctx)
                 val tv = (convertView as? TextView) ?: TextView(ctx)
                 tv.setSingleLine(false)
                 tv.maxLines = 2
+                val padL = if (row.kind == 0) 18 else 30
                 when (row.kind) {
                     0 -> {
                         tv.text = row.name
                         tv.setTextColor(0xFF9AA0A6.toInt())
                         tv.textSize = 12f
                         tv.setAllCaps(true)
-                        tv.setPadding(dp(18), dp(14), dp(12), dp(4))
+                        tv.setPadding(dp(padL), dp(14), dp(12), dp(4))
                     }
                     1 -> {
                         tv.text = row.name
                         tv.setTextColor(if (row.selected) 0xFF7DA2FF.toInt() else 0xFFE8EAED.toInt())
                         tv.textSize = 15f
-                        tv.setPadding(dp(18), dp(11), dp(12), dp(11))
+                        tv.setPadding(dp(padL), dp(11), dp(12), dp(11))
                     }
                     2 -> {
                         tv.text = row.name
                         tv.setTextColor(0xFF8AB4F8.toInt())
                         tv.textSize = 14f
-                        tv.setPadding(dp(18), dp(14), dp(12), dp(10))
+                        tv.setPadding(dp(padL), dp(14), dp(12), dp(10))
                     }
                     else -> {
                         tv.text = getString(R.string.loading_models)
                         tv.setTextColor(0xFF9AA0A6.toInt())
                         tv.textSize = 12f
-                        tv.setPadding(dp(18), dp(6), dp(12), dp(6))
+                        tv.setPadding(dp(padL), dp(6), dp(12), dp(6))
                     }
                 }
                 tv.setBackgroundColor(Color.TRANSPARENT)
                 return tv
             }
         }
-        lv = ListView(this)
+
+        val lv = ListView(this)
         lv.adapter = listAdapter
         lv.setBackgroundColor(0xFF17191E.toInt())
         lv.divider = null
@@ -237,22 +299,17 @@ class MainActivity : AppCompatActivity() {
 
         lv.setOnItemClickListener { _, _, pos, _ ->
             val row = rows.getOrNull(pos) ?: return@setOnItemClickListener
-            if (row.kind == 1 && row.name.startsWith("— не подключён")) {
-                dialog.dismiss()
-                startActivity(Intent(this, AccountActivity::class.java))
-                return@setOnItemClickListener
-            }
-            if (row.kind == 2) {
+            if (row.kind == 2 || (row.kind == 1 && row.name.startsWith("\u2014"))) {
                 dialog.dismiss()
                 startActivity(Intent(this, AccountActivity::class.java))
                 return@setOnItemClickListener
             }
             if (row.kind == 1) {
-                val s = SettingsStore.load(this)
+                val st = SettingsStore.load(this)
                 val updated = when (row.provider) {
-                    "gemini" -> s.copy(provider = "gemini", geminiModel = row.name)
-                    "opencode" -> s.copy(provider = "opencode", opencodeModel = row.name)
-                    else -> s.copy(provider = "openai", openaiModel = row.name)
+                    "gemini" -> st.copy(provider = "gemini", geminiModel = row.name)
+                    "opencode" -> st.copy(provider = "opencode", opencodeModel = row.name)
+                    else -> st.copy(provider = "openai", openaiModel = row.name)
                 }
                 SettingsStore.save(this, updated)
                 settings = updated
@@ -264,31 +321,13 @@ class MainActivity : AppCompatActivity() {
 
         dialog.show()
         refreshingMissingCaches {
+            settings = SettingsStore.load(this)
             rows.clear()
             rows.addAll(buildPickerRows())
             listAdapter.notifyDataSetChanged()
         }
     }
 
-    private fun buildPickerRows(): MutableList<PickerRow> {
-        val rows = mutableListOf<PickerRow>()
-        fun section(id: String, current: String, available: List<String>, configured: Boolean) {
-            rows.add(PickerRow(0, id, providerLabel(id)))
-            if (!configured) {
-                rows.add(PickerRow(1, id, "— не подключён, настрой в Аккаунте", false))
-                return
-            }
-            if (available.isEmpty()) rows.add(PickerRow(3))
-            val all = (listOf(current) + available.filter { it != current })
-            all.forEach { rows.add(PickerRow(1, id, it, it == current)) }
-        }
-        section("gemini", settings.geminiModel, settings.cacheGeminiModels, settings.geminiApiKey.isNotBlank())
-        section("opencode", settings.opencodeModel, settings.cacheOpencodeModels,
-            settings.opencodeAccessToken.isNotBlank() || settings.opencodeApiKey.isNotBlank())
-        section("openai", settings.openaiModel, settings.cacheOpenaiModels, settings.openaiApiKey.isNotBlank())
-        rows.add(PickerRow(2, name = "⚙ Настроить аккаунты и ключи"))
-        return rows
-    }
 
     /** Fetches model lists that are missing from the cache and caches them. */
     private fun refreshingMissingCaches(onDone: () -> Unit) {
@@ -446,7 +485,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun runAgent(text: String) {
         running = true
-        findViewById<ImageButton>(R.id.btnSend).isEnabled = false
+        btnSend.isEnabled = true
+        btnSend.setImageResource(R.drawable.ic_stop)
+        btnSend.contentDescription = getString(R.string.stop)
 
         adapter.items.add(ChatItem("user", text))
         val agentItem = ChatItem("agent", "")
@@ -454,7 +495,7 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyItemRangeInserted(adapter.items.size - 2, 2)
         scrollToBottom()
 
-        lifecycleScope.launch {
+        agentJob = lifecycleScope.launch {
             try {
                 engine.run(
                     text,
@@ -480,8 +521,23 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                runOnUiThread {
+                    if (agentItem.text.isBlank()) {
+                        val idx = adapter.items.indexOf(agentItem)
+                        if (idx >= 0) {
+                            adapter.items.removeAt(idx)
+                            adapter.notifyItemRemoved(idx)
+                        }
+                    } else {
+                        agentItem.text += " \u2022 остановлено"
+                    }
+                    adapter.items.add(ChatItem("info", "Запрос остановлен"))
+                    adapter.notifyItemInserted(adapter.items.size - 1)
+                    scrollToBottom()
+                }
             } catch (e: Exception) {
-                val msg = (e.message ?: e.toString()).take(400)
+                val msg = "[${providerLabel(settings.provider)}] " + (e.message ?: e.toString()).take(400)
                 runOnUiThread {
                     if (agentItem.text.isNotBlank()) {
                         adapter.items.add(ChatItem("error", msg))
@@ -505,7 +561,9 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Exception) {
                     }
                     running = false
-                    findViewById<ImageButton>(R.id.btnSend).isEnabled = true
+                    btnSend.isEnabled = true
+                    btnSend.setImageResource(R.drawable.ic_send)
+                    btnSend.contentDescription = getString(R.string.send)
                 }
             }
         }
@@ -561,6 +619,17 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.Holder>() {
                 params.gravity = Gravity.CENTER_HORIZONTAL
                 params.width = FrameLayout.LayoutParams.WRAP_CONTENT
                 holder.bubble.setPadding(dp(holder, 12), dp(holder, 8), dp(holder, 12), dp(holder, 8))
+            }
+            "info" -> {
+                holder.roleLabel.visibility = View.GONE
+                holder.messageText.visibility = View.VISIBLE
+                holder.messageText.text = item.text
+                holder.messageText.textSize = 12f
+                holder.messageText.setTextColor(0xFF9AA0A6.toInt())
+                holder.bubble.setBackgroundResource(R.drawable.bg_chip)
+                params.gravity = Gravity.CENTER_HORIZONTAL
+                params.width = FrameLayout.LayoutParams.WRAP_CONTENT
+                holder.bubble.setPadding(dp(holder, 12), dp(holder, 6), dp(holder, 12), dp(holder, 6))
             }
             "error" -> {
                 holder.roleLabel.visibility = View.VISIBLE
