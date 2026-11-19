@@ -23,6 +23,7 @@ class LlmClient(context: Context) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(300, TimeUnit.SECONDS)
+        .dns(ResilientDns)
         .build()
 
     suspend fun stream(
@@ -172,7 +173,20 @@ class LlmClient(context: Context) {
     }
 
     private fun readSse(request: Request, handler: (String) -> String): String {
-        http.newCall(request).execute().use { response ->
+        val response = try {
+            http.newCall(request).execute()
+        } catch (e: java.net.UnknownHostException) {
+            throw IOException(
+                "Нет интернета или DNS не находит сервер (" + (e.message ?: "").trim('"') +
+                    ").\nПроверь Wi-Fi/мобильные данные. " +
+                    "Если включён Private DNS или блокировщик рекламы — выключи его для этого приложения."
+            )
+        } catch (e: java.net.ConnectException) {
+            throw IOException("Соединение не установлено (" + (e.message ?: "") + "). Проверь интернет.")
+        } catch (e: java.net.SocketTimeoutException) {
+            throw IOException("Сервер не отвечает (таймаут). Попробуй ещё раз.")
+        }
+        response.use {
             if (!response.isSuccessful) {
                 val err = response.body?.string()?.take(2000) ?: ""
                 if (response.code == 401) throw HttpUnauthorized("HTTP 401: ${readableError(err)}")

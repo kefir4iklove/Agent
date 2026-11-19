@@ -16,6 +16,7 @@ object ModelCatalog {
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .dns(ResilientDns)
         .build()
 
     data class Result(val models: List<String>, val error: String? = null)
